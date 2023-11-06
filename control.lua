@@ -1,863 +1,902 @@
+nofirstrun = true
+onchangeyet = true
+pause = true
+
+local BUCKETS_COUNT = 10
+local current_bucket_index = 1
+
+local lastaddentityindex = {}
 local entitieslist
-local entitiesidx={}
+local entitiesidx = {}
 local reslist
-local gui={}
-local playerindex
-local furnace_type_index=1
+local gui = {}
+local furnace_type_index = 1
 
-local BUCKET=10
-local lastaddentityindex={}
-
-local Kchest={}
-Kchest["wooden-chest"]=true
-Kchest["iron-chest"]=true
-Kchest["steel-chest"]=true
-Kchest["storage-tank"]=true
-Kchest["pumpjack"]=true
-
-local Kmachine={
-	["assembling-machine-1"]=true,
-	["assembling-machine-2"]=true,
-	["assembling-machine-3"]=true,
-	["stone-furnace"]=true,
-	["steel-furnace"]=true,
-	["electric-furnace"]=true,
-	["oil-refinery"]=true,
-	["chemical-plant"]=true,
-	["stone-furnace"]=true,
-	["steel-furnace"]=true,
-	["electric-furnace"]=true,
-	["rocket-silo"]=true,
+local Kchest = {
+    ["wooden-chest"] = true,
+    ["iron-chest"] = true,
+    ["steel-chest"] = true,
+    ["storage-tank"] = true,
+    ["pumpjack"] = true,
 }
 
-local _fuel={"coal","solid-fuel"}
-local _fuel_list={
-	["gun-turret"]={{"piercing-rounds-magazine","firearm-magazine"}},
-	["artillery-turret"]={{"artillery-shell"}},
-	["flamethrower-turret"]={{"light-oil","heavy-oil","crude-oil"}},
-	["boiler"]={_fuel,{"water"}},
-	["burner-mining-drill"]={_fuel},
-	["stone-furnace"]={_fuel},
-	["steel-furnace"]={_fuel},
-	["heat-exchanger"]={{"water"}},
+local Kmachine = {}
+
+local Kfurnace = {
+    ["stone-furnace"] = true,
+    ["steel-furnace"] = true,
+    ["electric-furnace"] = true,
+}
+
+local storeLiquid = {}
+
+local storeNormalItems = {}
+
+local SiencePackNames = {
+    "automation-science-pack",
+    "logistic-science-pack",
+    "military-science-pack",
+    "chemical-science-pack",
+    "production-science-pack",
+    "utility-science-pack",
+    "space-science-pack",
+}
+
+local _fuel = {}
+local initfuel = { "coal", "solid-fuel" }
+local _fuel_list = {
+    ["flamethrower-turret"] = { { "light-oil", "heavy-oil", "crude-oil" } },
+    ["boiler"] = { _fuel, { "water" } },
+    ["burner-mining-drill"] = { _fuel },
+    ["stone-furnace"] = { _fuel },
+    ["steel-furnace"] = { _fuel },
+    ["heat-exchanger"] = { { "water" } },
+}
+_fuel_list.__index = _fuel_list.prototype
+
+local _ammo_list = {
+    ["gun-turret"] = { { "piercing-rounds-magazine", "firearm-magazine" } },
+    ["artillery-turret"] = { { "artillery-shell" } },
+}
+
+local ft_option = { "none", "iron", "copper", "steel", "stone-brick" }
+local ft_src = {
+    ["none"] = "",
+    ["iron"] = "iron-ore",
+    ["copper"] = "copper-ore",
+    ["steel"] = "iron-plate",
+    ["stone-brick"] = "stone",
 }
 
 function need_fuel(entity)
-	return _fuel_list[entity.prototype.name]~=nil
+    return _fuel_list[entity.prototype.name] ~= nil
+end
+
+function need_ammo(entity)
+    return _ammo_list[entity.prototype.name] ~= nil
 end
 
 function is_lab(entity)
-	return "lab"==entity.prototype.name
+    return entity.prototype.name == "lab"
 end
-
-local Kfluid={
-	["crude-oil"]=1,
-	["fluid-unknown"]=1,
-	["heavy-oil"]=1,
-	["light-oil"]=1,
-	["lubricant"]=1,
-	["petroleum-gas"]=1,
-	["steam"]=1,
-	["sulfuric-acid"]=1,
-	["water"]=1,
-}
 
 function is_fluid(name)
-	return Kfluid[name]~=nil
+    return game.fluid_prototypes[name] ~= nil
 end
 
-local Kfurnace={
-	["stone-furnace"]=true,
-	["steel-furnace"]=true,
-	["electric-furnace"]=true,
-}
 function is_furnace(entity)
-	return Kfurnace[entity.prototype.name]~=nil
+    return Kfurnace[entity.prototype.name] ~= nil
 end
 
 function is_machine(entity)
-	return Kmachine[entity.prototype.name]~=nil
+    return Kmachine[entity.prototype.name] ~= nil
 end
 
 function is_chest(entity)
-	return Kchest[entity.prototype.name]~=nil
+    return Kchest[entity.prototype.name] ~= nil
 end
 
 function is_accepted_type(entity)
-	return is_machine(entity)
-		or is_chest(entity)
-		or need_fuel(entity)
-		or is_lab(entity)
+    return is_machine(entity)
+            or is_chest(entity)
+            or need_fuel(entity)
+            or is_lab(entity)
 end
 
-local Ksp={
-	"automation-science-pack",
-	"logistic-science-pack",
-	"military-science-pack",
-	"chemical-science-pack",
-	"production-science-pack",
-	"utility-science-pack",
-	"space-science-pack",
-}
-
 function init()
-	local store1M={
-		"iron-ore",
-		"copper-ore",
-		"uranium-ore",
-		"stone",
-		"coal",
-		"water",
-		}
-	local store1K={
-		"iron-plate",
-		"copper-plate",
-		"steel-plate",
-		"stone-brick",
-		}
-	
-	local store25K={
-		"crude-oil",
-		"heavy-oil",
-		"light-oil",
-		"lubricant",
-		"petroleum-gas",
-		"sulfuric-acid",
-		}
-	local store200={
-		"transport-belt",
-		"pipe",
-		"inserter",
-		"copper-cable",
-		"iron-gear-wheel",
-		"electronic-circuit",
-		"stone-wall",
-		"firearm-magazine",
-		"piercing-rounds-magazine",
-		"grenade",
-		"plastic-bar",
-		"sulfur",
-		"advanced-circuit",
-		"engine-unit",
-		"iron-stick",
-		"rail",
-		"electric-furnace",
-		"productivity-module",
-		
-		"processing-unit",
-		"battery",
-		"electric-engine-unit",
-		"flying-robot-frame",
-		
-		"speed-module",
-		
-		"rocket-control-unit",
-		"low-density-structure",
-		"rocket-fuel",
-		"solid-fuel",
-		"automation-science-pack",
-		"logistic-science-pack",
-		"military-science-pack",
-		"chemical-science-pack",
-		"production-science-pack",
-		"utility-science-pack",
-		"space-science-pack",
-		"solar-panel",
-		"accumulator",
-		"radar",
-		"explosives",
-		"explosive-cannon-shell",
-		"artillery-shell",
-		}
-	
-	entitieslist={}
-	reslist={}
-	for i=1,7 do
-		entitieslist[i]= {}
-		lastaddentityindex[i]=1
-		for j=1,BUCKET do
-			entitieslist[i][j]={}
-		end
-		reslist[i]= {}
-		local f=function(items, n)
-			for k,v in ipairs(items) do
-				if reslist[i][v]==nil then
-					reslist[i][v]={count=0,max=n}
-				else
-					reslist[i][v].max=n
-				end
-			end
-		end
-		
-		f(store1M,1000000)
-		f(store1K,1000)
-		f(store25K,25000)
-		f(store200,200)
-		global.ar={
-			entitieslist=entitieslist,
-			reslist=reslist,
-			entitiesidx=entitiesidx,
-			lastaddentityindex=lastaddentityindex,
-		}
-	end
+    local allItems = {}
+    for _, item in pairs(game.item_prototypes) do
+        allItems[#allItems + 1] = item.name
+        if item.fuel_category == "chemical" then
+            _fuel[#_fuel + 1] = item.name
+        end
+    end
+    storeNormalItems = allItems
+    for _, fluid in pairs(game.fluid_prototypes) do
+        storeLiquid[#storeLiquid + 1] = fluid.name
+    end
+    for _, entity in pairs(game.get_filtered_entity_prototypes({ { filter = "crafting-machine" } })) do
+        if entity.burner_prototype ~= nil and
+                _fuel_list[entity.name] == nil and
+                entity.burner_prototype.fuel_categories["chemical"] then
+            _fuel_list[entity.name] = { initfuel }
+        end
+        Kmachine[entity.name] = true
+    end
+
+    entitieslist = {}
+    reslist = {}
+    for playerId = 1,7 do
+        entitieslist[playerId] = {}
+        lastaddentityindex[playerId] = 1
+        for bucketIndex = 1,BUCKETS_COUNT do
+            entitieslist[playerId][bucketIndex] = {}
+        end
+        reslist[playerId] = {}
+        local setMaxValues = function(items, newMaxValue)
+            for _,itemKey in ipairs(items) do
+                if reslist[playerId][itemKey] == nil then
+                    reslist[playerId][itemKey] = { count = 0, max = newMaxValue }
+                else
+                    reslist[playerId][itemKey].max = newMaxValue
+                end
+            end
+        end
+
+        setMaxValues(storeLiquid, settings.global["max-liquid"].value)
+        setMaxValues(storeNormalItems, settings.global["max-item"].value)
+        global.ar = {
+            entitieslist = entitieslist,
+            reslist = reslist,
+            entitiesidx = entitiesidx,
+            lastaddentityindex = lastaddentityindex,
+        }
+    end
 end
 
 function read_save()
-	entitieslist=global.ar.entitieslist
-    reslist=global.ar.reslist
-	entitiesidx=global.ar.entitiesidx
-	lastaddentityindex=global.ar.lastaddentityindex
+    entitieslist = global.ar.entitieslist
+    reslist = global.ar.reslist
+    entitiesidx = global.ar.entitiesidx
+    lastaddentityindex = global.ar.lastaddentityindex
+    onchangeyet = true
+    nofirstrun = true
+    local setMaxValues = function(items, newMaxValue)
+        for playerId = 1,7 do
+            for _,itemKey in ipairs(items) do
+                reslist[playerId][itemKey].max = newMaxValue
+            end
+        end
+    end
+    setMaxValues(storeLiquid, settings.global["max-liquid"].value)
+    setMaxValues(storeNormalItems, settings.global["max-item"].value)
+end
+
+function onchange()
+    local allItems = {}
+    for _, item in pairs(game.item_prototypes) do
+        allItems[#allItems + 1] = item.name
+        if item.fuel_category == "chemical" then
+            _fuel[#_fuel + 1] = item.name
+        end
+        for playerId = 1,7 do
+            reslist[playerId][item.name].max = settings.global["max-item"].value
+        end
+    end
+    storeNormalItems = allItems
+    for _, fluid in pairs(game.fluid_prototypes) do
+        storeLiquid[#storeLiquid + 1] = fluid.name
+        for playerId = 1,7 do
+            reslist[playerId][fluid.name].max = settings.global["max-liquid"].value
+        end
+    end
+    for _, entity in pairs(game.get_filtered_entity_prototypes({ { filter = "crafting-machine" } })) do
+        if entity.burner_prototype ~= nil and
+                _fuel_list[entity.name] == nil and
+                entity.burner_prototype.fuel_categories["chemical"] then
+            _fuel_list[entity.name] = { initfuel }
+        end
+        Kmachine[entity.name] = true
+    end
 end
 
 function entity_size_str(player)
-	local str=""
-	for k,v in ipairs(entitieslist[player]) do
-		str=str..table_size(v).." "
-	end
-	return str
+    local str = ""
+    for _,v in ipairs(entitieslist[player]) do
+        str = str .. table_size(v) .. " "
+    end
+    return str
 end
 
-function print_inventory(i)
-	if i==nil then
-		return
-	end
-	
-	local f=function(j)
-		if j==nil then
-			return ""
-		end
-		local str="slot "..#j
-		for k,v in pairs(j.get_contents()) do
-			str=str.. " "..k.." "..v
-		end
-		return str
-	end
-	
-	game.print("-----")
-	game.print("output "..f(i.get_output_inventory()))
-	--game.print("module "..f(i.get_module_inventory()))
-	game.print("fuel "..f(i.get_fuel_inventory()))
-	game.print("burnt "..f(i.get_burnt_result_inventory()))
-	game.print("furnace_source "..f(i.get_inventory(defines.inventory.furnace_source)))	
-	game.print("assembling_machine_input "..f(i.get_inventory(defines.inventory.assembling_machine_input)))
-	game.print("turretammo "..f(i.get_inventory(defines.inventory.turret_ammo)))
+function print_inventory(entity)
+    if entity == nil then
+        return
+    end
 
-	local f2=function(j)
-		if j==nil then
-			return ""
-		end
-		local str=""
-		for k,v in pairs(j) do
-			str=str.." "..k.." "..v
-		end
-		return str
-	end
-	
-	game.print("fluid "..f2(i.get_fluid_contents()))
+    local contentKeyValueString = function(inventory)
+        if inventory == nil then
+            return ""
+        end
+        local str = "slot " .. #inventory
+        for key,value in pairs(inventory.get_contents()) do
+            str = str .. " " .. key .. " " .. value
+        end
+        return str
+    end
+
+    game.print("-----")
+    game.print("output " .. contentKeyValueString(entity.get_output_inventory()))
+    -- game.print("module " .. contentKeyValueString(entity.get_module_inventory()))
+    game.print("fuel " .. contentKeyValueString(entity.get_fuel_inventory()))
+    game.print("burnt " .. contentKeyValueString(entity.get_burnt_result_inventory()))
+    game.print("furnace_source " .. contentKeyValueString(entity.get_inventory(defines.inventory.furnace_source)))
+    game.print("assembling_machine_input " .. contentKeyValueString(entity.get_inventory(defines.inventory.assembling_machine_input)))
+    game.print("turretammo " .. contentKeyValueString(entity.get_inventory(defines.inventory.turret_ammo)))
+
+    local keyValueString = function(table)
+        if table == nil then
+            return ""
+        end
+        local str = ""
+        for key,value in pairs(table) do
+            str = str .. " " .. key .. " " .. value
+        end
+        return str
+    end
+
+    game.print("fluid " .. keyValueString(entity.get_fluid_contents()))
 end
 
-function deposit_res(playerid,name,num)
-	if reslist[playerid][name] == nil then
-		--this kind is ignored
-		return 0
-	end
-	local obj=reslist[playerid][name]
-	local prev=obj.count
-	obj.count=math.min(obj.count+num, obj.max)
-	local diff=obj.count-prev
-	return diff
+function deposit_res(playerId, itemName, itemDepositCount)
+    local obj = reslist[playerId][itemName]
+    if obj == nil then
+        -- item not tracked/stored
+        return 0
+    end
+    if itemDepositCount <= 0 then
+        return 0
+    end
+    obj.count = obj.count + itemDepositCount
+    return itemDepositCount
 end
 
-function withdraw_res(playerid,name,num)
-	if reslist[playerid][name] == nil then
-		--this kind is ignored
-		return 0
-	end
-	local obj=reslist[playerid][name]
-	local res=math.min(obj.count,num)
-	obj.count=obj.count-res
-	return res
+function withdraw_res(playerId, itemName, itemWithdrawCount)
+    local obj = reslist[playerId][itemName]
+    if obj == nil then
+        -- item not tracked/stored
+        return 0
+    end
+    if itemWithdrawCount > obj.count then
+        itemWithdrawCount = obj.count
+    end
+    if itemWithdrawCount <= 0 then
+        return 0
+    end
+    obj.count = obj.count - itemWithdrawCount
+    return itemWithdrawCount
 end
 
-function read_res(playerid,name)
-	if reslist[playerid][name] == nil then
-		--this kind is ignored
-		return 0
-	end
-	local obj=reslist[playerid][name]
-	return obj.count
+function read_res(playerId, itemName)
+    local obj = reslist[playerId][itemName]
+    if obj == nil then
+        -- item not tracked/stored
+        return 0
+    end
+    return obj.count
 end
 
-function can_insert_res(playerid,name)
-	if reslist[playerid][name] == nil then
-		--this kind is ignored
-		return 0
-	end
-	local obj=reslist[playerid][name]
-	return obj.max-obj.count
-end
-
-function draw_res(player,name,n,entity)
-	if n>=0 or n<0 then
-		return
-	end
-	local text=name
-	if n>0 then
-		text=text.." + "
-	else
-		text=text.." - "
-	end
-
-	text=text..math.floor(math.abs(n))
-	
-	game.get_player(player).create_local_flying_text{
-		text=text,
-		position=entity.position}
-end
-
-function harvest_chest(entity)
-	local inventory=entity.get_output_inventory()
-	if inventory==nil then
-		game.print(entity.prototype.name.." no inventory")
-		return
-	end
-	
-	if is_chest(entity) then
-		harvest_chest(entity)
-		return
-	end
+function can_insert_res(playerId, itemName)
+    local obj = reslist[playerId][itemName]
+    if obj == nil then
+        -- item not tracked/stored
+        return 0
+    end
+    return obj.max - obj.count
 end
 
 function print_recipe(entity)
-	local re=entity.get_recipe()
-	if re==nil then
-		return
-	end
-	
-	local str=""
-	for i,v in ipairs(re.ingredients) do
-		str=str.." "..v.name.." "..v.amount
-	end
-	str=str.." >>"
-	for i,v in ipairs(re.products) do
-		str=str.." "..v.name.." "..v.amount
-	end
-	game.print(entity.prototype.name.." recipe "..str)
+    local recipe = entity.get_recipe()
+    if recipe == nil then
+        return
+    end
+
+    local str = ""
+    for _,ingredient in ipairs(recipe.ingredients) do
+        str = str .. " " .. ingredient.name .. " " .. ingredient.amount
+    end
+    str = str .. " >>"
+    for _,product in ipairs(recipe.products) do
+        str = str .. " " .. product.name .. " " .. product.amount
+    end
+    game.print(entity.prototype.name .. " recipe " .. str)
 end
 
-function read_output(player,entity)
-	local outputinventory=entity.get_output_inventory()
-	if nil~=outputinventory then
-		--k=prototype name v=number
-		for k,v in pairs(outputinventory.get_contents()) do
-			game.print("found "..k.." "..v)
-			--must be not fluid
-			local reserve=game.item_prototypes[k].stack_size
-			if reserve>1 then
-				reserve=reserve/2
-			else
-				reserve=0
-			end
-			if v>reserve then
-				local n=v-reserve
-				n=deposit_res(player,k, n)
-				if n>0 then
-					game.print("remove "..k.." "..n)
-					outputinventory.remove({name=k,count=n})
-				end
-			end
-		end
-	end
-	local fc=entity.get_fluid_contents()
-	--game.print(entity.prototype.name.." fluid "..table_size(fc))
-	for k,v in pairs(fc) do
-		local n=deposit_res(player,k,v)
-		entity.remove_fluid{name=k,amount=n}
-	end
-	return true
+function try_get_from_entity(playerId, entity, itemName, itemCount, inventory)
+    local itemSpace = can_insert_res(playerId, itemName)
+    if itemCount > itemSpace then
+        itemCount = itemSpace
+    end
+
+    if itemCount < 1 then
+        return 0
+    end
+
+    if is_fluid(itemName) then
+        itemCount = entity.remove_fluid{ name = itemName, amount = itemCount }
+    else
+        itemCount = inventory.remove{ name = itemName, count = itemCount }
+    end
+
+    deposit_res(playerId, itemName, itemCount)
+
+    return itemCount
 end
 
-function try_get_from_entity(player,entity,name,n,inv)
-	--game.print(name.." "..n)
-	local n1=can_insert_res(player,name)
-	if n>n1 then
-		n=n1
-	end
-	
-	if n<1 then
-		return 0
-	end
-	if is_fluid(name) then
-		n=entity.remove_fluid{name=name,amount=n}
-	else
-		n=inv.remove{name=name,count=n}
-	end
-	
-	draw_res(player,name,n,entity)
-	deposit_res(player,name,n)
-	return n
+function try_put_to_entity(playerId, entity, itemName, itemCount, inventory)
+    local availableItems = read_res(playerId, itemName) - settings.global["min-item"].value
+
+    if itemCount > availableItems then
+        itemCount = availableItems
+    end
+
+    if itemCount < 1 then
+        return 0
+    end
+
+    if is_fluid(itemName) then
+        itemCount = entity.insert_fluid{ name = itemName, amount = itemCount }
+    else
+        itemCount = inventory.insert{ name = itemName, count = itemCount }
+    end
+
+    withdraw_res(playerId, itemName, itemCount)
+
+    return itemCount
 end
 
-function try_put_to_entity(player,entity,name,n,inv)
-	local n1=read_res(player,name)
-	if n>n1 then
-		n=n1
-	end
-	
-	if n<1 then
-		return 0
-	end
-
-	if is_fluid(name) then
-		n=entity.insert_fluid{name=name,amount=n}
-	else
-		n=inv.insert{name=name,count=n}
-	end
-	draw_res(player,name,-n,entity)
-	withdraw_res(player,name,n)
-	return n
+function read_entity(entity, itemName)
+    if is_fluid(itemName) then
+        return entity.get_fluid_count(itemName)
+    else
+        return entity.get_item_count(itemName)
+    end
 end
 
-function read_entity(entity,name)
-	if is_fluid(name) then
-		return entity.get_fluid_count(name)
-	else
-		return entity.get_item_count(name)
-	end
+function do_chest(playerId, entity)
+    if not is_chest(entity) then
+        return false
+    end
+    local inventory = entity.get_output_inventory()
+    if inventory ~= nil then
+        -- k = prototype name v = number
+        for itemName,itemCount in pairs(inventory.get_contents()) do
+            try_get_from_entity(playerId, entity, itemName, itemCount, inventory)
+        end
+    end
+
+    for fluidName,fluidCount in pairs(entity.get_fluid_contents()) do
+        try_get_from_entity(playerId, entity, fluidName, fluidCount, inventory)
+    end
+
+    return true
 end
 
-function do_chest(player,entity)
-	if not is_chest(entity) then
-		return false
-	end
-	local inv=entity.get_output_inventory()
-	if nil~=inv then
-		--k=prototype name v=number
-		for k,v in pairs(inv.get_contents()) do
-			try_get_from_entity(player,entity,k,v,inv)
-		end
-	end
-	
-	local fc=entity.get_fluid_contents()
-	for k,v in pairs(fc) do
-		try_get_from_entity(player,entity,k,v)
-	end
-	return true
+function do_ammo(playerId, entity)
+    if not need_ammo(entity) then
+        return false
+    end
+
+    local inventory = entity.get_inventory(defines.inventory.fuel)
+    local preferredAmmo = settings.global["preferred-ammo"].value
+    local ammoCount = read_entity(entity, preferredAmmo)
+    if ammoCount < settings.global["min-ammo"].value then
+        local depositedAmmo = try_put_to_entity(playerId, entity, preferredAmmo, settings.global["min-ammo"].value - ammoCount, inventory)
+        if depositedAmmo > 0 then
+            return true
+        end
+    end
+
+    for _,ammoSubList in pairs(_ammo_list[entity.prototype.name]) do
+        for k2,ammoName in ipairs(ammoSubList) do
+            ammoCount = read_entity(entity, ammoName)
+            if ammoCount < settings.global["min-ammo"].value then
+                local depositedAmmo = try_put_to_entity(playerId, entity, ammoName, settings.global["min-ammo"].value - ammoCount, inventory)
+                if depositedAmmo > 0 then
+                    return true
+                end
+            end
+        end
+    end
+
+    return true
 end
 
-local MAX_FUEL=3
-function do_fuel(player,entity)
-	if not need_fuel(entity) then
-		return
-	end
-	
-	local inv=entity.get_inventory(defines.inventory.fuel)
+function do_fuel(playerId, entity)
+    if not need_fuel(entity) then
+        return false
+    end
 
-	for k1,v1 in pairs(_fuel_list[entity.prototype.name]) do
-		for k2,v2 in ipairs(v1) do
-			local n=MAX_FUEL
-			if "water"==v2 then
-				n=9999
-			end
-			
-			local n1=read_entity(entity,v2)
-			if n1> n then
-				try_get_from_entity(player,entity,v2,n1-n,inv)
-			end
-			
-			if n1<n then
-				try_put_to_entity(player,entity,v2, n, inv)
-			end
-		end
-	end
-	
+    if entity.burner ~= nil then
+        local burntResultInventory = entity.get_inventory(defines.inventory.burnt_result)
+        if burntResultInventory ~= nil and
+                entity.burner.currently_burning ~= nil and
+                entity.burner.currently_burning.burnt_result ~= nil then
+            local burntResultName = entity.burner.currently_burning.burnt_result.name
+            try_get_from_entity(
+                playerId,
+                entity,
+                burntResultName,
+                burntResultInventory.get_item_count(burntResultName),
+                burntResultInventory
+            )
+        end
+
+        if entity.burner.currently_burning ~= nil then
+            local fuelName = entity.burner.currently_burning.name
+            local fuelCount = read_entity(entity, entity.burner.currently_burning.name)
+            local minAmount = settings.global["min-fuel"].value
+            local maxAmount = settings.global["max-fuel"].value
+            if fuelName == "water" then
+                minAmount = 9999
+                maxAmount = 9999
+            end
+
+            if fuelCount > maxAmount then
+                try_get_from_entity(
+                    playerId,
+                    entity,
+                    fuelName,
+                    fuelCount - maxAmount,
+                    entity.get_inventory(defines.inventory.fuel)
+                )
+            end
+
+            if fuelCount >= minAmount then
+                return
+            end
+        end
+    end
+
+    local inventory = entity.get_inventory(defines.inventory.fuel)
+    local preferredFuel = settings.global["preferred-fuel"].value
+    local preferredFuelCount = read_entity(entity, preferredFuel)
+    if preferredFuelCount < settings.global["min-fuel"].value then
+        local depositedFuel = try_put_to_entity(playerId, entity, preferredFuel, settings.global["min-fuel"].value - preferredFuelCount, inventory)
+        if depositedFuel > 0 then
+            return
+        end
+    end
+
+    for _,fuelSubList in pairs(_fuel_list[entity.prototype.name]) do
+        for _,fuelName in ipairs(fuelSubList) do
+            local preferedAmount = settings.global["min-fuel"].value
+            if fuelName == "water" then
+                preferedAmount = 9999
+            end
+
+            local fuelCount = read_entity(entity, fuelName)
+            local depositedFuel = try_put_to_entity(playerId, entity, fuelName, preferedAmount - fuelCount, inventory)
+            if depositedFuel > 0 then
+                return
+            end
+        end
+    end
+
+    return true
 end
 
-function do_lab(player,entity)
-	if not is_lab(entity) then
-		return false
-	end
-	
-	local inv=entity.get_inventory(defines.inventory.lab_input)
-	for i,v in ipairs(Ksp) do
-		local n=inv.get_item_count(v)
-		if n<1 then
-			try_put_to_entity(player,entity,v,1,inv)
-		end
-	end
-	return true
+function do_lab(playerId, entity)
+    if not is_lab(entity) then
+        return false
+    end
+
+    local inv = entity.get_inventory(defines.inventory.lab_input)
+    for i,siencePackName in ipairs(SiencePackNames) do
+        if inv.get_item_count(siencePackName) < 1 then
+            try_put_to_entity(playerId, entity, siencePackName, 1, inv)
+        end
+    end
+    return true
 end
 
-function do_output(player,entity)
-	local t=Koutput[entity.prototype.name]
-	if not t then
-		return false
-	end
-	
-	for k,v in ipairs(t) do
-		try_get_from_entity(player,entity,v,50,entity.get_output_inventory())
-	end
-	return true
+function do_ssp(playerId, entity)
+    try_get_from_entity(playerId, entity, "space-science-pack", 2000, entity.get_output_inventory())
 end
 
-function do_ssp(player,entity)
-	if "rocket-silo"==entity.prototype.name then
-		try_get_from_entity(player,entity,"space-science-pack",1000,entity.get_output_inventory())
-	end
+function do_furnace(playerId, entityObj)
+    local entity = entityObj.entity
+    if not is_furnace(entity) then
+        return false
+    end
+
+    -- get all output
+    local inventory = entity.get_output_inventory()
+    for itemName,itemCount in pairs(inventory.get_contents()) do
+        try_get_from_entity(playerId, entity, itemName, itemCount, inventory)
+    end
+
+    -- decide what to burn based on current resource amount
+    inventory = entity.get_inventory(defines.inventory.furnace_source)
+
+    local insertFurnaceItems = function(itemName)
+            local preferedAmount = 10
+            local currentAmount = inventory.get_item_count()
+
+            if currentAmount >= preferedAmount then
+                return 0
+            end
+
+            return try_put_to_entity(playerId, entity, itemName, preferedAmount - currentAmount, inventory)
+        end
+
+    if inventory.is_empty() then
+        if entityObj.furnace_source ~= nil then
+            insertFurnaceItems(entityObj.furnace_source)
+        end
+        return
+    end
+
+    for itemName,_ in pairs(inventory.get_contents()) do
+        insertFurnaceItems(itemName)
+        entityObj.furnace_source = itemName
+    end
 end
 
-function do_furnace(player,e)
-	local entity=e.entity
-	if not is_furnace(entity) then
-		return false
-	end
-	
-	--get all output
-	local inv=entity.get_output_inventory()
-	for k,v in pairs(inv.get_contents()) do
-		try_get_from_entity(player,entity,k,v,inv)
-	end
-	--decide what to burn based on current resource amount
-	inv=entity.get_inventory(defines.inventory.furnace_source)
-	
-	local f=function(name,inv)
-			local m1=10
-			local cur=inv.get_item_count()
-			if cur<m1 then
-				return try_put_to_entity(player,entity,name,m1-cur,inv)
-			end
-			return 0
-		end
-	if not inv.is_empty() then
-		local fc=inv.get_contents()
-		for k,v in pairs(fc) do
-			--game.print("source "..k)
-			f(k,inv)
-			e.furnace_source=k
-		end
-	else
-		if e.furnace_source~=nil then
-			f(e.furnace_source,inv)
-		end
-	end
-	
+function do_empty(playerId, entity)
+    for fluidName,fluidCount in pairs(entity.get_fluid_contents()) do
+        fluidCount = entity.remove_fluid{ name = fluidName, amount = fluidCount }
+        if fluidCount > 0 then
+            deposit_res(playerId, fluidName, fluidCount)
+        end
+    end
+
+    for inventorySlot = 1, entity.get_max_inventory_index() do
+        local inventory = entity.get_inventory(inventorySlot)
+        if inventory ~= nil then
+            for itemName,itemCount in pairs(inventory.get_contents()) do
+                itemCount = inventory.remove{ name = itemName, count = itemCount }
+                if itemCount > 0 then
+                    deposit_res(playerId, itemName, itemCount)
+                end
+            end
+        end
+    end
 end
 
-function setres(n)
-	reslist[1]["automation-science-pack"].count=n
-	reslist[1]["logistic-science-pack"].count=n
-	reslist[1]["military-science-pack"].count=n
-	reslist[1]["chemical-science-pack"].count=n
-	reslist[1]["production-science-pack"].count=n
-	reslist[1]["utility-science-pack"].count=n
-	reslist[1]["rocket-control-unit"].count=n
-	reslist[1]["low-density-structure"].count=n
-	reslist[1]["rocket-fuel"].count=n
+function harvest_feed_entity(playerId, entityObj)
+    if entityObj.entity.to_be_deconstructed() then
+        do_empty(playerId, entityObj.entity)
+        return
+    end
+
+    if entityObj.entity.prototype.name == "rocket-silo" then
+        do_ssp(playerId, entityObj.entity)
+    end
+
+    if do_chest(playerId, entityObj.entity) then
+        return
+    end
+
+    if do_lab(playerId, entityObj.entity) then
+        return
+    end
+
+    do_fuel(playerId, entityObj.entity)
+
+    if do_furnace(playerId, entityObj) then
+        return
+    end
+
+    if do_ammo(playerId, entityObj.entity) then
+        return
+    end
+
+    if not is_machine(entityObj.entity) then
+        return
+    end
+
+    local recipe = entityObj.entity.get_recipe()
+    if recipe == nil then
+        return
+    end
+
+    local inventory = entityObj.entity.get_output_inventory()
+    for _,productItem in ipairs(recipe.products) do
+        try_get_from_entity(playerId, entityObj.entity, productItem.name, 9999, inventory)
+    end
+
+    for _,ingredientItem in ipairs(recipe.ingredients) do
+        inventory = entityObj.entity.get_inventory(defines.inventory.furnace_source)
+        local ingredientAmount = read_entity(entityObj.entity, ingredientItem.name)
+        local ingredientPreferedAmount = ingredientItem.amount / ( recipe.energy / entityObj.entity.crafting_speed ) * 2
+        if ingredientPreferedAmount < ingredientItem.amount then
+            ingredientPreferedAmount = ingredientItem.amount * 2
+        end
+        if ingredientAmount < ingredientPreferedAmount then
+            try_put_to_entity(playerId, entityObj.entity, ingredientItem.name, ingredientPreferedAmount - ingredientAmount, inventory)
+        end
+    end
 end
 
-function setmax(n)
-	local r=reslist[1]
-	r["crude-oil"].max=n
-	r["heavy-oil"].max=n
-	r["light-oil"].max=n
-	r["lubricant"].max=n
-	r["petroleum-gas"].max=n
-	r["sulfuric-acid"].max=n
+function harvest_feed(bucketIndex)
+    for playerId,playerEntites in pairs(entitieslist) do
+        for entityKey,entityObj in pairs(playerEntites[bucketIndex]) do
+            if entityObj.entity == nil then
+                game.print(" is nil")
+            elseif not entityObj.entity.valid then
+                playerEntites[bucketIndex][entityKey] = nil
+            else
+                harvest_feed_entity(playerId, entityObj)
+            end
+        end
+    end
 end
-
-function harvest_feed_entity(player,e)
-	local entity=e.entity
-	--print_inventory(entity)
-	
-	do_ssp(player,entity)
-
-	if do_chest(player,entity) then
-		return
-	end
-	if do_lab(player,entity) then
-		return
-	end
-
-	if do_furnace(player,e) then
-		return
-	end
-	do_fuel(player,entity)
-	if false==is_machine(entity) then
-		return
-	end
-
-	local recipe=entity.get_recipe()
-	if recipe==nil then
-		return
-	end
-	for k,v in ipairs(recipe.products) do
-		try_get_from_entity(player,entity,v.name,9999,entity.get_output_inventory())
-	end
-
-	for k,v in ipairs(recipe.ingredients) do
-		local inv=entity.get_inventory(defines.inventory.furnace_source)
-		local n=read_entity(entity,v.name)
-		local m=v.amount/(recipe.energy/entity.crafting_speed)*2
-		--game.print(v.name.." "..v.amount.." "..recipe.energy.." "..n.." "..m)
-		if m<v.amount then
-			m=v.amount*2
-		end
-		if n<m then
-			try_put_to_entity(player,entity,v.name,m-n,inv)
-		end
-	end
-end
-
-function harvest_feed(bucket)
-	--k1=playerid  v1=its all entities
-	for k1,v1 in pairs(entitieslist) do
-		--k2=entity unique id v2=entity obj
-		for k2,v2 in pairs(v1[bucket]) do
-			if v2.entity==nil then
-				game.print(" is nil")
-			elseif v2.entity.valid ==false then
-				--game.print("invalid entity")
-				v1[bucket][k2]=nil
-			else
-				harvest_feed_entity(k1,v2)
-			end
-		end
-		
-	end	
-end
-
-local ft_option={"none","iron","copper","steel","stone-brick"}
-local ft_src={
-	["none"]="",
-	["iron"]="iron-ore",
-	["copper"]="copper-ore",
-	["steel"]="iron-plate",
-	["stone-brick"]="stone",
-}
 
 function ft_source()
-	return ft_src[ft_option[furnace_type_index]]
+    return ft_src[ft_option[furnace_type_index]]
 end
 
 function on_sel_change(event)
-	if "gui_ft_setting"==event.element.name then
-		furnace_type_index=event.element.selected_index
-		game.get_player(event.player_index).gui.top["furnace_type"].caption="FT="..ft_source()
-	end
+    if event.element.name == "gui_ft_setting" then
+        furnace_type_index = event.element.selected_index
+        game.get_player(event.player_index).gui.top["furnace_type"].caption = "FT=" .. ft_source()
+    end
 end
 
 function on_gui_click(event)
-	if is_fluid(event.element.name) then
-		return
-	end
-	
-	if "furnace_type"==event.element.name then
-		if nil ==gui[event.player_index].ft then
-			gui[event.player_index].ft=game.get_player(event.player_index).gui.center.add{type="frame"}
-			gui[event.player_index].ft.add{type="drop-down",items=ft_option,selected_index=furnace_type_index,name="gui_ft_setting"}
-		else
-			gui[event.player_index].ft.destroy()
-			gui[event.player_index].ft=nil
-		end
-		return
-	end
-	
-	local n=1
-	if defines.mouse_button_type.left==event.button then
-		if event.shift then
-			local p= game.item_prototypes[event.element.name]
-			if nil==p or nil==p.stack_size then
-				game.print(event.element.name.." is nil")
-			else
-				n=game.item_prototypes[event.element.name].stack_size
-			end
-		else
-			n=1
-		end
-	end
-	
-	if defines.mouse_button_type.right==event.button then
-		if event.shift then
-			n=game.item_prototypes[event.element.name].stack_size/2
-		else
-			n=5
-		end
-	end
-	if n<1 then
-		n=1
-	end
-	n=withdraw_res(event.player_index,event.element.name,n)
-	if n>0 then
-		game.get_player(event.player_index).get_inventory(defines.inventory.character_main).insert{name=event.element.name,count=n}
-	end
+    if is_fluid(event.element.name) then
+        return
+    end
+
+    if event.element.name == "furnace_type" then
+        if gui[event.player_index].ft == nil then
+            gui[event.player_index].ft = game.get_player(event.player_index).gui.center.add{ type = "frame" }
+            gui[event.player_index].ft.add{ type = "drop-down", items = ft_option, selected_index = furnace_type_index, name = "gui_ft_setting" }
+        else
+            gui[event.player_index].ft.destroy()
+            gui[event.player_index].ft = nil
+        end
+
+        return
+    end
+
+    local itemCount = 1
+    if defines.mouse_button_type.left == event.button then
+        if event.shift then
+            local p = game.item_prototypes[event.element.name]
+            if p == nil or p.stack_size == nil then
+                game.print(event.element.name .. " is nil")
+            else
+                itemCount = game.item_prototypes[event.element.name].stack_size
+            end
+        else
+            itemCount = 1
+        end
+    end
+
+    if defines.mouse_button_type.right == event.button then
+        if event.shift then
+            itemCount = game.item_prototypes[event.element.name].stack_size / 2
+        else
+            itemCount = 5
+        end
+    end
+
+    if itemCount < 1 then
+        itemCount = 1
+    end
+
+    itemCount = withdraw_res(event.player_index, event.element.name, itemCount)
+    if itemCount > 0 then
+        game.get_player(event.player_index).get_inventory(defines.inventory.character_main).insert{ name = event.element.name, count = itemCount }
+    end
 end
 
-function create_gui(root,index)
-	local btn=root.add{type="button",caption="FT",name="furnace_type"}
-	gui[index]={}
-	gui[index].restable=root.add{type="table",column_count=28,name="restable"}
-	gui[index].entityinfo=root.add{type="label",caption="",name="entityinfo"}
-	for k1,v1 in pairs(reslist[index]) do
-		local str
-		if is_fluid(k1) then
-			str="fluid/"..k1
-		else
-			str="item/"..k1
-		end
-		gui[index].restable.add{type="sprite-button",sprite=str,name=k1,}
-	end
+function create_gui(root, index)
+    gui[index] = {
+        restable = root.add{ type = "table", column_count = settings.global["item-columns"].value, name = "restable" },
+        entityinfo = root.add{ type = "label", caption = "", name = "entityinfo" },
+    }
 
+    root.add{ type = "button", caption = "FT", name = "furnace_type" }
+
+    for itemName,_ in pairs(reslist[index]) do
+        local str = "item/" .. itemName
+        if is_fluid(itemName) then
+            str = "fluid/" .. itemName
+        end
+        gui[index].restable.add{ type = "sprite-button", sprite = str, name = itemName, visible = false }
+    end
 end
 
 function show()
-	for k,v in ipairs(game.connected_players) do
-		local f=function()
-			return "entity "..entity_size_str(v.index)
-		end
+    for _,player in ipairs(game.connected_players) do
+        local entityCaption = function()
+            return "entity " .. entity_size_str(player.index)
+        end
 
-		local res=reslist[v.index]
+        local res = reslist[player.index]
 
-		if nil==v.gui.top["furnace_type"] then
-			create_gui(v.gui.top,v.index)
-		end
+        if player.gui.top["furnace_type"] == nil then
+            create_gui(player.gui.top, player.index)
+        end
 
-		if nil==gui[v.index] then
-			gui[v.index]={}
-			gui[v.index].restable=v.gui.top["restable"]
-			gui[v.index].entityinfo=v.gui.top["entityinfo"]
-		end
-		
-		for k1,v1 in pairs(res) do
-			local g=gui[v.index].restable[k1]
-			g.tooltip=v1.count
-			if not is_fluid(k1) then
-				g.tooltip=g.tooltip..". Click to get.[Left=1 Right=5 Shift+L=Stack Shift+R=Half stack]"
-			end
-			g.number=v1.count
-		end
-		
-		gui[v.index].entityinfo.caption=f()
-	end
+        if gui[player.index] == nil then
+            gui[player.index] = {
+                restable = player.gui.top["restable"],
+                entityinfo = player.gui.top["entityinfo"],
+            }
+        end
+
+        for itemName,itemStorage in pairs(res) do
+            local resourceListIcon = gui[player.index].restable[itemName]
+            resourceListIcon.number = itemStorage.count
+            resourceListIcon.tooltip = itemStorage.count
+            if not is_fluid(itemName) then
+                resourceListIcon.tooltip = resourceListIcon.tooltip .. itemName .. ". Click to get.[Left=1 Right=5 Shift+L=Stack Shift+R=Half stack]"
+            end
+            if itemStorage.count > 0 then
+                resourceListIcon.visible = true
+            end
+        end
+
+        gui[player.index].entityinfo.caption = entityCaption()
+
+        if player.gui.top["furnace_type"] ~= nil then
+            player.gui.top["furnace_type"].visible = settings.global["ft-button"].value;
+            gui[player.index].entityinfo.visible = settings.global["ft-button"].value;
+        end
+    end
 end
 
 function new_entity(entity)
-	if is_accepted_type(entity)==false then
-	   return
-	end
-	
-	if nil==entity.last_user then
-		game.print(entity.prototype.name.." has no last_user")
-		return
-	end
-	local player=entity.last_user.index
-	entitieslist[player][lastaddentityindex[player]][entity.unit_number]={entity=entity}
-	local e=entitieslist[player][lastaddentityindex[player]][entity.unit_number]
-	if entitiesidx[entity.unit_number]~=nil then
-		--game.print("ERROR this index is used "..player.." "..entity.unit_number)
-		return
-	end
-	entitiesidx[entity.unit_number]={
-		playerid=player,
-		idx=lastaddentityindex[player],
-	}
-	lastaddentityindex[player]=lastaddentityindex[player]+1
-	if lastaddentityindex[player]>BUCKET then
-		lastaddentityindex[player]=1
-	end
-	
-	local ftsrc=ft_source()
-	if is_furnace(entity) and #ftsrc>1 then
-		e.furnace_source=ftsrc
-	end
+    if is_accepted_type(entity) == false then
+       return
+    end
+
+    if entity.last_user == nil then
+        game.print(entity.prototype.name .. " has no last_user")
+        return
+    end
+
+    if entitiesidx[entity.unit_number] ~= nil then
+        return
+    end
+
+    local playerId = entity.last_user.index
+    local bucketIndex = lastaddentityindex[playerId];
+    local entityObj = { entity = entity }
+
+    local ftsrc = ft_source()
+    if is_furnace(entity) and #ftsrc > 1 then
+        entityObj.furnace_source = ftsrc
+    end
+
+    entitieslist[playerId][bucketIndex][entity.unit_number] = entityObj
+
+    entitiesidx[entity.unit_number] = {
+        playerid = playerId,
+        idx = bucketIndex,
+    }
+
+    bucketIndex = bucketIndex + 1
+    if bucketIndex > BUCKETS_COUNT then
+        bucketIndex = 1
+    end
+
+    lastaddentityindex[playerId] = bucketIndex
 end
 
 function on_built_entity(event)
-	local pt=event.created_entity.prototype
-	new_entity(event.created_entity)
+    new_entity(event.created_entity)
 end
 
 function on_entity_cloned(event)
-	local pt=event.destination.prototype
-	new_entity(event.destination)
+    new_entity(event.destination)
 end
 
 function remove_entity(entity)
-	if is_accepted_type(entity)==false then
-		return
-	end
-	local p=entitiesidx[entity.unit_number]
-	if nil==p then
-		game.print("unknown entity "..entity.prototype.name)
-		return
-	end
-	local e=entitieslist[p.playerid][p.idx][entity.unit_number]
-	if e==nil then
-		game.print("invalid entity")
-		return
-	end
-	
-	entitieslist[p.playerid][p.idx][entity.unit_number]=nil
-	entitiesidx[entity.unit_number]=nil
+    local bucketIndexObj = entitiesidx[entity.unit_number]
+    if bucketIndexObj == nil then
+        if is_accepted_type(entity) == false then
+            return
+        end
+
+        game.print("unknown entity " .. entity.prototype.name)
+        return
+    end
+
+    local entityObj = entitieslist[bucketIndexObj.playerid][bucketIndexObj.idx][entity.unit_number]
+    if entityObj == nil then
+        game.print("invalid entity")
+        return
+    end
+
+    entitieslist[bucketIndexObj.playerid][bucketIndexObj.idx][entity.unit_number] = nil
+    entitiesidx[entity.unit_number] = nil
 end
 
 function on_entity_died (event)
-	remove_entity(event.entity)
+    remove_entity(event.entity)
 end
 
 function on_player_mined_entity (event)
-	remove_entity(event.entity)
+    remove_entity(event.entity)
 end
 
+script.on_event("autoresourceex-hide-restable", function(event)
+    localplayer = game.players[event.player_index]
+    if localplayer.gui.top.restable.visible == true then
+        localplayer.gui.top.restable.visible = false
+    else
+        localplayer.gui.top.restable.visible = true
+    end
+end)
+
+script.on_event("autoresourceex-run-onchange", function(event)
+    onchange()
+end)
+
 script.on_event(defines.events.on_built_entity, on_built_entity)
+
 script.on_event(defines.events.on_entity_cloned, on_entity_cloned)
 
-local _bucket=1
 script.on_event(defines.events.on_tick, function(event)
-	if 0 == (event.tick%(5)) then	
-		harvest_feed(_bucket)
-		_bucket=_bucket+1
-		if _bucket>BUCKET then
-			_bucket=1
-		end
-	end
-	
-	if 0 == (event.tick%(12)) then
-		show()
-	end
+    if (event.tick%(5)) == 0 then
+        harvest_feed(current_bucket_index)
+        current_bucket_index = current_bucket_index + 1
+        if current_bucket_index > BUCKETS_COUNT then
+            current_bucket_index = 1
+        end
+    end
+    if onchangeyet then
+        onchange()
+        onchangeyet = false
+    end
+    if (event.tick%(12)) == 0 then
+        -- preffuel = settings.global["preferred-fuel"].value
+        -- _fuel = {preffuel, preffuel}
+        if pause then
+            show()
+        end
+    end
 end)
 
 script.on_event(defines.events.on_gui_click, on_gui_click)
-script.on_event(defines.events.on_gui_opened , function(event)
-	if event.entity~=nil then
-		if nil==event.entity.last_user then
-			event.entity.last_user=game.get_player(event.player_index)
-		end
-		new_entity(event.entity)
-	end
+
+script.on_event(defines.events.on_gui_opened, function(event)
+    if event.entity ~= nil then
+        if event.entity.last_user == nil then
+            event.entity.last_user = game.get_player(event.player_index)
+        end
+        new_entity(event.entity)
+    end
 end)
+
 script.on_event(defines.events.on_gui_selection_state_changed, on_sel_change)
+
 script.on_event(defines.events.on_entity_died, on_entity_died)
+
 script.on_event(defines.events.on_player_mined_entity, on_player_mined_entity)
 
 script.on_event(defines.events.on_robot_built_entity, function(event)
-	--game.print("robot build entity "..event.created_entity.prototype.name)
-	new_entity(event.created_entity)
+    new_entity(event.created_entity)
 end)
 
 script.on_event(defines.events.on_entity_cloned, function(event)
-	--game.print("clone entity "..event.destination.prototype.name)
-	new_entity(event.destination)
+    new_entity(event.destination)
 end)
 
 script.on_event(defines.events.on_trigger_created_entity, function(event)
-	--game.print("trigger create entity "..event.entity.prototype.name)
-	new_entity(event.entity)
+    new_entity(event.entity)
 end)
 
 script.on_event(defines.events.on_robot_mined_entity, function(event)
-	--game.print("robot mine entity "..event.entity.prototype.name)
-	remove_entity(event.entity)
+    remove_entity(event.entity)
 end)
 
+script.on_configuration_changed(onchange)
+
 script.on_load(read_save)
+
 script.on_init(init)
